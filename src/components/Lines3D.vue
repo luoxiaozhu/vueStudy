@@ -62,7 +62,7 @@ export default {
             }
         },
         inputFuc (value) {
-            if (this.INT) this.INT.setChange(value);
+            if (this.INT) this.INT.setRange(value);
         },
         changeCamera () {
             if (this.INT) this.INT.switchCamera();
