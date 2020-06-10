@@ -349,7 +349,7 @@ class Initialize {
         const self = this;
         if (self.scene) {
             self.scene.add(_createAxios());
-            self._point = [];
+            self._point = datas;
             if (!self.zLabels) {
                 self.zLabels = new THREE.Object3D();
                 self.scene.add(self.zLabels);
@@ -368,13 +368,10 @@ class Initialize {
                 pointData.name = data;
                 pointData.value = [];
                 const xLabel = _createPlaneText({
-                    type: 'x', content: data
+                    type: 'x', content: data.name
                 });
                 xLabel.position.set(index * 5, 0, -xLabel._size.width / 2 - 1);
                 self.xLabels.add(xLabel);
-                for (let i = 0; i < 30; i++) {
-                    pointData.value.push(Math.min(Math.random() + 0.5, 1));
-                }
             });
 
             for (let i = 0, length = self._point[0].value.length; i < length; i++) {
