@@ -44,8 +44,8 @@ export default {
                     },
                     controls: {
                         target: [17.5, 0, 19.2],
-                        enableZoom: false,
-                        enablePan: false,
+                        enableZoom: true,
+                        enablePan: true,
                         enableRotate: true
                     }
                 });

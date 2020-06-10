@@ -2,9 +2,28 @@ import {THREE} from '@corelib/three.min';
 import $ from 'jquery';
 import publicLabel from '@corelib/publicLabel';
 import pointImg from '../assets/point.png';
-import simpleScreenCut from '../lib/simpleScreenCut';
+import data from '../assets/data';
 
 const PLANE_FONT_SIZE_RATIO = 30;// -平面文字换算比例
+const _createClipPlane = (points, opts) => {
+    opts = opts || {};
+    const {size = 1} = opts;
+    const geometry = new THREE.PlaneGeometry(size, size, points.length - 1);
+    const {vertices} = geometry;
+    for (let i = 0, length = points.length; i < length; i++) {
+        vertices[i] = points[i].clone();
+        vertices[i + length] = points[i].clone().setY(0);
+    }
+    const material = new THREE.MeshBasicMaterial({
+        color: '#2c2c40',
+        opacity: 0.5,
+        transparent: true,
+        depthTest: false,
+        side: THREE.DoubleSide
+    });
+
+    return new THREE.Mesh(geometry, material);
+};
 const _createPoint = (points, opts) => {
     opts = opts || {};
     const {pointSize = 1, index} = opts;
@@ -239,6 +258,7 @@ const _createPolyLine = (points, opts) => {
     // -创建线
     group.add(new THREE.Line(geometry, material));
     group.add(_createPoint(points, {index}));
+    group.add(_createClipPlane(dataPoints));
     return group;
 };
 const raycaster = new THREE.Raycaster();
@@ -353,7 +373,7 @@ class Initialize {
                 xLabel.position.set(index * 5, 0, -xLabel._size.width / 2 - 1);
                 self.xLabels.add(xLabel);
                 for (let i = 0; i < 30; i++) {
-                    pointData.value.push(Math.min(Math.random() + 0.8, 1));
+                    pointData.value.push(Math.min(Math.random() + 0.5, 1));
                 }
             });
 
