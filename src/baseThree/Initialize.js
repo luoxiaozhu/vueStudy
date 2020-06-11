@@ -16,7 +16,7 @@ const _createClipPlane = (points, opts) => {
     const geometry = new THREE.PlaneBufferGeometry(size, size, dataPoints.length - 1);
     const { position } = geometry.attributes;
     for (let i = 0, length = dataPoints.length; i < length; i++) {
-        const point = points[i].clone();
+        const point = dataPoints[i].clone();
         position.array[i * 3] = point.x;
         position.array[i * 3 + 1] = point.y;
         position.array[i * 3 + 2] = point.z;
@@ -32,6 +32,7 @@ const _createClipPlane = (points, opts) => {
         transparent: true,
         side: THREE.DoubleSide,
         wireframe: false
+        // depthTest: false
     });
 
     return new THREE.Mesh(geometry, material);
@@ -290,9 +291,10 @@ const _animation = (self, dt) => {
             if (time.value <= 1)time.value += dt;
             const {userData} = self.topFace;
             const x = self.topFace.material.uniforms.u_x;
-            if (userData.xValue > x.value)x.value += userData.xValueAdd * 0.5;
+            if (userData.xValue > x.value)x.value += 0.5;
+
             const z = self.topFace.material.uniforms.u_z;
-            if (userData.zValue > z.value)z.value += userData.zValueAdd * 0.5;
+            if (userData.zValue > z.value)z.value += 0.5;
         }
     }
 };
@@ -342,7 +344,7 @@ const _createTextCanvas = (content) => {
 
 const _createPlaneText = (opts) => {
     opts = opts || {};
-    const {type = '', content = ''} = opts;
+    const {type = '', content = '', index} = opts;
     const texture = _createTextCanvas(content);
     const {_size} = texture;
     const {width, height, realWidth} = _size;
@@ -373,6 +375,7 @@ const _createPlaneText = (opts) => {
     });
     const mesh = new THREE.Mesh(geometry, material);
     mesh._size = {width: realWidth / PLANE_FONT_SIZE_RATIO};
+    mesh._index = index;
     mesh._isLabel = true;
     mesh._type = type;
     mEvent.push(mesh);
@@ -566,9 +569,8 @@ class Initialize {
             self.topFace = _createTopFace(datas);
             self.topFace.userData = {
                 xValue: 0.0,
-                xValueAdd: 1,
-                zValue: 0.0,
-                zValueAdd: 1
+                zValue: 0.0
+
             };
             self.scene.add(self.topFace);
             const [startIndex, endIndex] = value;
@@ -576,7 +578,7 @@ class Initialize {
             self._points = points;
             // -创建z轴标签
             points[0].forEach((point, i) => {
-                const zLabel = _createPlaneText({type: 'z', content: '6月' + (i + startIndex + 1) + '日'});
+                const zLabel = _createPlaneText({type: 'z', content: '6月' + (i + startIndex + 1) + '日', index: i});
                 zLabel.position.set(-zLabel._size.width / 2 - 1, 0, point.z);
                 self.zLabels.add(zLabel);
                 // -创建z方向线
@@ -591,7 +593,7 @@ class Initialize {
             // -创建x轴标签
             points.forEach((point, index) => {
                 const xLabel = _createPlaneText({
-                    type: 'x', content: datas[index].name
+                    type: 'x', content: datas[index].name, index
                 });
                 xLabel.position.set(point[0].x, 0, -xLabel._size.width / 2 - 1);
                 self.xLabels.add(xLabel);
@@ -620,16 +622,25 @@ class Initialize {
         const self = this;
         const {position} = node;
         if (self.topFace) {
-            self.topFace.userData.xValue = position.x;
-            self.topFace.userData.zValue = position.z;
+            self.topFace.userData.xValue = position.x + 0.1;
+            self.topFace.userData.zValue = position.z + 0.1;
         }
-        // const points = self._points;
-        // if(node._type === 'z'){
-        //     self._clipPlane = (_createPolyLine(point, {
-        //         type: 'z'
-        //     }));
-        //
-        // }
+        const points = self._points;
+        if (node._type === 'z') {
+            const linePoints = [];
+            for (let i = 0; i < points.length; i++) {
+                linePoints.push(points[i][node._index]);
+            }
+            self._clipPlane = _createClipPlane(linePoints, {
+                type: 'x'
+            });
+            self.scene.add(self._clipPlane);
+        } else if (node._type === 'x') {
+            self._clipPlane = _createClipPlane(points[node._index], {
+                type: 'z'
+            });
+            self.scene.add(self._clipPlane);
+        }
     }
     onWindowResize (event) {
         const self = this;
