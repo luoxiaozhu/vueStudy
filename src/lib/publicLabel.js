@@ -13,6 +13,12 @@ const FONT_GAP_RATIO = 3.0;// -维度标签放大参数
  * 标签公共方法合集
  */
 const publicLabel = {
+    getVecCenter:(src, dst)=> {
+        return src.clone().lerp(dst, 0.5);
+    },
+    getValues:(obj)=> {
+        return Object.values(obj);
+    },
     /**
      * 根据配置项获取dom的字符串
      * @param content

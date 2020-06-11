@@ -2,28 +2,36 @@ import {THREE} from '@corelib/three.min';
 import $ from 'jquery';
 import publicLabel from '@corelib/publicLabel';
 import pointImg from '../assets/point.png';
-import ImprovedNoise from '../lib/ImprovedNoise';
+import _Shaders from '../assets/shaders';
 
-const LINE_POINTS_COUNT = 100;
+const LINE_POINTS_COUNT_UNIT = 100;
 const PLANE_FONT_SIZE_RATIO = 30;// -平面文字换算比例
 const X_AXIS_INTERVAL = 5;// -x轴间距
 const Z_AXIS_INTERVAL = 5;// -z轴间距
-const Y_AXIS_MAX_VALUE = 20;
+const Y_AXIS_MAX_VALUE = 10;
 const _createClipPlane = (points, opts) => {
     opts = opts || {};
-    const {size = 1, color = randomColor()} = opts;
-    const geometry = new THREE.PlaneGeometry(size, size, points.length - 1);
-    const {vertices} = geometry;
-    for (let i = 0, length = points.length; i < length; i++) {
-        vertices[i] = points[i].clone();
-        vertices[i + length] = points[i].clone().setY(0);
-    };
+    const {size = 1, color = randomColor(), type} = opts;
+    const dataPoints = _getCurvePoints(points, type);
+    const geometry = new THREE.PlaneBufferGeometry(size, size, dataPoints.length - 1);
+    const { position } = geometry.attributes;
+    for (let i = 0, length = dataPoints.length; i < length; i++) {
+        const point = points[i].clone();
+        position.array[i * 3] = point.x;
+        position.array[i * 3 + 1] = point.y;
+        position.array[i * 3 + 2] = point.z;
+        position.array[(i + length) * 3] = point.x;
+        position.array[(i + length) * 3 + 1] = 0;
+        position.array[(i + length) * 3 + 2] = point.z;
+    }
+    position.needsUpdate = true;
     const colors = _getColorArr(color);
     const material = new THREE.MeshBasicMaterial({
         color: colors[0],
         opacity: 0.5,
         transparent: true,
-        side: THREE.DoubleSide
+        side: THREE.DoubleSide,
+        wireframe: false
     });
 
     return new THREE.Mesh(geometry, material);
@@ -35,20 +43,39 @@ const _getDataFromRange = (datas, value) => {
     datas.forEach(data => {
         const pointData = {};
         pointData.name = data.name;
-        pointData.value = data.value.slice(startIndex, endIndex);
+        pointData.value = data.value.slice(startIndex, endIndex + 1);
         result.push(pointData);
     });
     return result;
 };
 
 const _getPointsFromDatas = (datas) => {
+    const result = [];
+    datas.forEach((data, dataIndex) => {
+        const points = [];
+        result.push(points);
+        data.value.forEach((value, valueIndex) => {
+            const vector = new THREE.Vector3(dataIndex * X_AXIS_INTERVAL + 3,
+                (value) * Y_AXIS_MAX_VALUE,
+                (valueIndex) * Z_AXIS_INTERVAL + 3);
+            points.push(vector);
+        });
+    });
+    return result;
+};
+
+// const _createSpriteText = (node) => {
+//
+// };
+
+const _getCurvePointsFromDatas = (datas) => {
     const points = [];
     datas.forEach((data, dataIndex) => {
         const curvePoints = [];
         data.value.forEach((value, valueIndex) => {
-            curvePoints.push(new THREE.Vector3(X_AXIS_INTERVAL * dataIndex, value * Y_AXIS_MAX_VALUE, Z_AXIS_INTERVAL * valueIndex));
+            curvePoints.push(new THREE.Vector3(X_AXIS_INTERVAL * dataIndex + 3, (value) * Y_AXIS_MAX_VALUE, Z_AXIS_INTERVAL * valueIndex + 3));
         });
-        points.push(_getCuverPoints(curvePoints));
+        points.push(_getCurvePoints(curvePoints, 'z'));
     });
     const result = [];
     for (let i = 0, length = points[0].length; i < length; i++) {
@@ -56,115 +83,84 @@ const _getPointsFromDatas = (datas) => {
         for (let j = 0, dataLength = points.length; j < dataLength; j++) {
             curverPoints.push(points[j][i]);
         }
-        result.push(_getCuverPoints(curverPoints));
+        result.push(_getCurvePoints(curverPoints, 'x'));
     }
     return result;
 };
-const _generateHeight = (width, height) => {
-    var size = width * height, data = new Uint8Array(size),
-        perlin = new ImprovedNoise(), quality = 1, z = Math.random() * 100;
-
-    for (var j = 0; j < 4; j++) {
-        for (var i = 0; i < size; i++) {
-            var x = i % width, y = ~~(i / width);
-            data[ i ] += Math.abs(perlin.noise(x / quality, y / quality, z) * quality * 1.75);
-        }
-
-        quality *= 5;
-    }
-
-    return data;
-};
-
-const _generateTexture = (data, width, height) => {
-    let canvas, canvasScaled, context, image, imageData, vector3, sun, shade;
-
-    vector3 = new THREE.Vector3(0, 0, 0);
-
-    sun = new THREE.Vector3(1, 1, 1);
-    sun.normalize();
-
-    canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-
-    context = canvas.getContext('2d');
-    context.fillStyle = '#000';
-    context.fillRect(0, 0, width, height);
-
-    image = context.getImageData(0, 0, canvas.width, canvas.height);
-    imageData = image.data;
-
-    let i = 0;
-    let j = 0;
-    let l = imageData.length;
-    for (; i < l; i += 4, j++) {
-        vector3.x = data[ j - 2 ] - data[ j + 2 ];
-        vector3.y = 2;
-        vector3.z = data[ j - width * 2 ] - data[ j + width * 2 ];
-        vector3.normalize();
-
-        shade = vector3.dot(sun);
-
-        imageData[ i ] = (96 + shade * 128) * (0.5 + data[ j ] * 0.007);
-        imageData[ i + 1 ] = (32 + shade * 96) * (0.5 + data[ j ] * 0.007);
-        imageData[ i + 2 ] = (shade * 96) * (0.5 + data[ j ] * 0.007);
-    }
-
-    context.putImageData(image, 0, 0);
-
-    // Scaled 4x
-
-    canvasScaled = document.createElement('canvas');
-    canvasScaled.width = width * 4;
-    canvasScaled.height = height * 4;
-
-    context = canvasScaled.getContext('2d');
-    context.scale(4, 4);
-    context.drawImage(canvas, 0, 0);
-
-    image = context.getImageData(0, 0, canvasScaled.width, canvasScaled.height);
-    imageData = image.data;
-
-    i = 0;
-    l = imageData.length;
-    for (; i < l; i += 4) {
-        const v = ~~(Math.random() * 5);
-
-        imageData[ i ] += v;
-        imageData[ i + 1 ] += v;
-        imageData[ i + 2 ] += v;
-    }
-
-    context.putImageData(image, 0, 0);
-
-    return canvasScaled;
-};
-
 const _createTopFace = (datas, opts) => {
     opts = opts || {};
-    const {color = randomColor()} = opts;
+    const {color = '#FFFFFF'} = opts;
     const colors = _getColorArr(color);
-    const points = _getPointsFromDatas(datas);
-    const geometry = new THREE.PlaneGeometry(1, 1, points.length - 1, points[0].length - 1);
-    const { vertices } = geometry;
+    const points = _getCurvePointsFromDatas(datas);
+
+    const geometry = new THREE.PlaneBufferGeometry(1, 1, points.length - 1, points[0].length - 1);
+    const { position } = geometry.attributes;
+    // geometry.addAttribute('color',
+    //     new THREE.BufferAttribute(new Float32Array(position.array.length), 3));
+    // const vertexColors = geometry.attributes.color;
     for (let i = 0, length = points.length; i < length; i++) {
         for (let j = 0, hLength = points[i].length; j < hLength; j++) {
-            vertices[i * hLength + j] = points[i][j];
+            position.array[3 * (i * hLength + j)] = points[i][j].x;
+            position.array[3 * (i * hLength + j) + 1] = points[i][j].y;
+            position.array[3 * (i * hLength + j) + 2] = points[i][j].z;
+            // const heightColor = _getColorFromHeight(points[i][j].y);
+            // vertexColors.array[3 * (i * hLength + j)] = heightColor.r;
+            // vertexColors.array[3 * (i * hLength + j) + 1] = heightColor.g;
+            // vertexColors.array[3 * (i * hLength + j) + 2] = heightColor.b;
         }
     }
-    const data = _generateHeight(128, 128);
-    const texture = new THREE.CanvasTexture(_generateTexture(data, 128, 128));
-    texture.wrapS = THREE.ClampToEdgeWrapping;
-    texture.wrapT = THREE.ClampToEdgeWrapping;
-    const material = new THREE.MeshBasicMaterial({
-        color: colors[0], transparent: true, side: THREE.DoubleSide, map: texture
+    position.needsUpdate = true;
+    // vertexColors.needsUpdate = true;
+    geometry.computeVertexNormals();
+    const glColors = [
+        new THREE.Color('#fff35b'),
+        new THREE.Color('#a78b48'),
+        new THREE.Color('#af1a1a'),
+        new THREE.Color('#322854'),
+        new THREE.Color('#250e2a')
+    ];
+    const material = new THREE.ShaderMaterial({
+        defines: {
+            NUM_DISTINCT: glColors.length
+        },
+        uniforms: {
+            u_x: {
+                value: 0.0
+            },
+            u_time: {
+                value: 0.0
+            },
+            u_z: {
+                value: 0.0
+            },
+            colorArr: {
+                value: glColors
+            },
+            colorNum: {
+                value: glColors.length
+            },
+            height: {
+                value: Y_AXIS_MAX_VALUE * 1.5
+            },
+            u_lightDirection: {
+                value: new THREE.Vector3(1.0, 0.0, 0.0).normalize()
+            }, // 光照角度
+            u_lightColor: {
+                value: new THREE.Color('#cfcfcf')
+            }, // 光照颜色
+            u_AmbientLight: {
+                value: new THREE.Color('#dddddd')
+            } // 全局光颜色
+        },
+        side: THREE.DoubleSide,
+        vertexShader: _Shaders.TopFaceVShader,
+        fragmentShader: _Shaders.TopFaceFShader
     });
     return new THREE.Mesh(geometry, material);
 };
 const _createPoint = (points, opts) => {
     opts = opts || {};
-    const {pointSize = 1, index, color = randomColor()} = opts;
+    const {pointSize = 1, index, color = randomColor(), type} = opts;
     const pointCloud = new THREE.Object3D();
     pointCloud._index = index;
     const texture = new THREE.TextureLoader().load(pointImg);
@@ -172,14 +168,16 @@ const _createPoint = (points, opts) => {
     const Build = new THREE.Mesh(cGeo.clone());
     const colors = _getColorArr(color);
     points.forEach((point, index) => {
-        var sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, color: colors[0], depthTest: false }));
+        var sprite = new THREE.Sprite(new THREE.SpriteMaterial({map: texture, color: colors[0]}));
         sprite.position.copy(point);
+        sprite.position.y += 0.2;
         sprite.scale.set(pointSize, pointSize, pointSize);
         sprite._index = index;
+        sprite._type = type;
+        sprite._color = colors[0];
         pointCloud.add(sprite);
         Build.geometry = new THREE.PlaneGeometry(pointSize * 2, pointSize * 2);
         Build.position.copy(point);
-        // Build.rotation.x = Math.PI / 2;
         Build.updateMatrix();
         cGeo.merge(Build.geometry, Build.matrix);
     });
@@ -279,14 +277,23 @@ const defaultConfig = {
         enableRotate: true,
         rotateSpeed: 0.5,
         distance: [0, 8000],
-        polarAngle: [-Math.PI, Math.PI],
-        azimuthAngle: [-Math.PI, Math.PI],
+        polarAngle: [0, Math.PI / 2],
+        azimuthAngle: [-Infinity, Infinity],
         target: [0, 0, 0]
     }
 };
 const _animation = (self, dt) => {
     if (dt < 0.1) {
         if (self.controls)self.controls.update();
+        if (self.topFace) {
+            const time = self.topFace.material.uniforms.u_time;
+            if (time.value <= 1)time.value += dt;
+            const {userData} = self.topFace;
+            const x = self.topFace.material.uniforms.u_x;
+            if (userData.xValue > x.value)x.value += userData.xValueAdd * 0.5;
+            const z = self.topFace.material.uniforms.u_z;
+            if (userData.zValue > z.value)z.value += userData.zValueAdd * 0.5;
+        }
     }
 };
 
@@ -362,10 +369,13 @@ const _createPlaneText = (opts) => {
     }
     geometry.applyMatrix(matrix);
     const material = new THREE.MeshLambertMaterial({
-        map: texture, transparent: true, side: THREE.DoubleSide, depthTest: false
+        map: texture, transparent: true, side: THREE.DoubleSide
     });
     const mesh = new THREE.Mesh(geometry, material);
     mesh._size = {width: realWidth / PLANE_FONT_SIZE_RATIO};
+    mesh._isLabel = true;
+    mesh._type = type;
+    mEvent.push(mesh);
     return mesh;
 };
 
@@ -384,24 +394,38 @@ const _createAxios = (opts) => {
     return group;
 };
 
-const _getCuverPoints = (points) => {
-    const curve = new THREE.CatmullRomCurve3(points);
-    return curve.getPoints(LINE_POINTS_COUNT);
+const _getCurvePoints = (points, type) => {
+    const newPoints = points.concat();
+    if (type) {
+        const startPoint = newPoints[0].clone();
+        startPoint.setY(0);
+        const endPoint = newPoints[newPoints.length - 1].clone();
+        endPoint.setY(0);
+        type === 'x' ? startPoint.setX(0) : startPoint.setZ(0);
+        newPoints.unshift(startPoint);
+        newPoints.push(endPoint);
+    }
+
+    const curve = new THREE.CatmullRomCurve3(newPoints);
+    return curve.getPoints(LINE_POINTS_COUNT_UNIT);
 };
 
 const _createPolyLine = (points, opts) => {
     const group = new THREE.Object3D();
     opts = opts || {};
-    const {color = randomColor(), index} = opts;
+    const {color = '#787473', type, index} = opts;
     const colors = _getColorArr(color);
-    const dataPoints = _getCuverPoints(points);
+    const dataPoints = _getCurvePoints(points, type);
+    dataPoints.forEach(point => {
+        point.y += 0.2;
+    });
     const geometry = new THREE.BufferGeometry().setFromPoints(dataPoints);
     const material = new THREE.LineBasicMaterial({ transparent: true, color: colors[0], opacity: colors[1] });
     // Create the final object to add to the scene
     // -创建线
     group.add(new THREE.Line(geometry, material));
-    group.add(_createPoint(points, {index, color}));
-    group.add(_createClipPlane(dataPoints, {color}));
+    group.add(_createPoint(points, {color, index, type}));
+    // group.add(_createClipPlane(dataPoints, {color}));
     return group;
 };
 const _pick = (event, self) => {
@@ -438,7 +462,7 @@ class Initialize {
                 this.scene = new THREE.Scene();
                 // - 添加灯光
                 var directionalLight = new THREE.DirectionalLight(0xffffff, 5);
-                directionalLight.position.set(20, 10, 0);
+                directionalLight.position.set(10, 20, 0);
                 this.scene.add(directionalLight);
 
                 this.clock = new THREE.Clock();
@@ -514,7 +538,7 @@ class Initialize {
         const self = this;
         if (self.scene) {
             self.scene.add(_createAxios());
-            self._point = datas;
+            self._metaData = datas;
             if (!self.zLabels) {
                 self.zLabels = new THREE.Object3D();
                 self.scene.add(self.zLabels);
@@ -534,40 +558,48 @@ class Initialize {
         self.value = value;
         if (self._model === '3D') {
             self.disposeObject();
+            const datas = _getDataFromRange(self._metaData, value);
+            self._datas = datas;
             if (self.topFace) {
                 publicLabel.disposeObj(self.topFace);
-                self.topFace = _createTopFace(_getDataFromRange(self._point, value));
-                self.scene.add(self.topFace);
-            } else {
-                self.topFace = _createTopFace(_getDataFromRange(self._point, value));
-                self.scene.add(self.topFace);
             }
+            self.topFace = _createTopFace(datas);
+            self.topFace.userData = {
+                xValue: 0.0,
+                xValueAdd: 1,
+                zValue: 0.0,
+                zValueAdd: 1
+            };
+            self.scene.add(self.topFace);
             const [startIndex, endIndex] = value;
-            for (let i = startIndex; i < endIndex; i++) {
-                const zLabel = _createPlaneText({type: 'z', content: '6月' + (i + 1) + '日'});
-                zLabel.position.set(-zLabel._size.width / 2 - 1, 0, (i - startIndex) * Z_AXIS_INTERVAL);
+            const points = _getPointsFromDatas(datas);
+            self._points = points;
+            // -创建z轴标签
+            points[0].forEach((point, i) => {
+                const zLabel = _createPlaneText({type: 'z', content: '6月' + (i + startIndex + 1) + '日'});
+                zLabel.position.set(-zLabel._size.width / 2 - 1, 0, point.z);
                 self.zLabels.add(zLabel);
-            }
-            const {_point} = self;
-            let xLabelAdd = false;
-            for (let i = startIndex; i < endIndex; i++) {
-                const points = [];
-                for (let j = 0, dataLength = _point.length; j < dataLength; j++) {
-                    const vector = new THREE.Vector3(j * X_AXIS_INTERVAL, _point[j].value[i] * Y_AXIS_MAX_VALUE, (i - startIndex) * Z_AXIS_INTERVAL);
-                    points.push(vector);
-                    if (!xLabelAdd) {
-                        const xLabel = _createPlaneText({
-                            type: 'x', content: _point[j].name
-                        });
-                        xLabel.position.set(j * X_AXIS_INTERVAL, 0, -xLabel._size.width / 2 - 1);
-                        self.xLabels.add(xLabel);
-                    }
-                }
-                self.lines.add(_createPolyLine(points, {
-                    index: i
+                // -创建z方向线
+                const linePoints = [];
+                points.forEach(p => {
+                    linePoints.push(p[i]);
+                });
+                self.lines.add(_createPolyLine(linePoints, {
+                    type: 'x', index: i
                 }));
-                xLabelAdd = true;
-            }
+            });
+            // -创建x轴标签
+            points.forEach((point, index) => {
+                const xLabel = _createPlaneText({
+                    type: 'x', content: datas[index].name
+                });
+                xLabel.position.set(point[0].x, 0, -xLabel._size.width / 2 - 1);
+                self.xLabels.add(xLabel);
+                // -创建x方向线
+                self.lines.add(_createPolyLine(point, {
+                    type: 'z'
+                }));
+            });
         }
     }
 
@@ -586,30 +618,18 @@ class Initialize {
 
     pickSprite (node) {
         const self = this;
-        self.camera.position.set(-51.41, 14.25, 28.24);
-        self.controls.target.set(1, 15, 29.9);
-        self.disposeObject();
-        const {_point, value} = self;
-        const [startIndex, endIndex] = value;
-        const _index = Math.floor(node.faceIndex / 2);
-        const pointData = _point[_index];
-        const xLabel = _createPlaneText({content: pointData.name});
-        xLabel.position.z -= xLabel._size.width / 2 + 1;
-        // xLabel.position.y += 2;
-        xLabel.rotation.y = -Math.PI / 2;
-        self.xLabels.add(xLabel);
-        const points = [];
-        for (let i = startIndex; i < endIndex; i++) {
-            const zLabel = _createPlaneText({content: '6月' + (i + 1) + '日'});
-            zLabel.rotation.y = -Math.PI / 2;
-            zLabel.position.z = (i - startIndex) * 5;
-            zLabel.position.y -= 2;
-            self.zLabels.add(zLabel);
-            const vector = new THREE.Vector3(0, pointData.value[i] * 20, (i - startIndex) * 5);
-            points.push(vector);
+        const {position} = node;
+        if (self.topFace) {
+            self.topFace.userData.xValue = position.x;
+            self.topFace.userData.zValue = position.z;
         }
-        self.lines.add(_createPolyLine(points));
-        self._model = '2D';
+        // const points = self._points;
+        // if(node._type === 'z'){
+        //     self._clipPlane = (_createPolyLine(point, {
+        //         type: 'z'
+        //     }));
+        //
+        // }
     }
     onWindowResize (event) {
         const self = this;
@@ -623,10 +643,29 @@ class Initialize {
     onDocumentMouseMove (event) {
         const self = this;
         const intersects = _pick(event, self);
-        if (intersects.length > 0 && intersects[0].object._isHelper) {
+        if (self._clipPlane) {
+            publicLabel.disposeObj(self._clipPlane);
+        }
+        if (intersects.length > 0) {
             self.container[0].style.cursor = 'pointer';
+            if (intersects[0].object._isLabel) {
+                self.pickSprite(intersects[0].object);
+            } else {
+                if (self.topFace) {
+                    self.topFace.material.uniforms.u_x.value = 0.0;
+                    self.topFace.material.uniforms.u_z.value = 0.0;
+                    self.topFace.userData.xValue = 0.0;
+                    self.topFace.userData.zValue = 0.0;
+                }
+            }
         } else {
             self.container[0].style.cursor = 'auto';
+            if (self.topFace) {
+                self.topFace.material.uniforms.u_x.value = 0.0;
+                self.topFace.material.uniforms.u_z.value = 0.0;
+                self.topFace.userData.xValue = 0.0;
+                self.topFace.userData.zValue = 0.0;
+            }
         }
     }
 

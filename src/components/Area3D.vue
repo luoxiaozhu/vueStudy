@@ -2,7 +2,6 @@
     <div class="threeNode">
         <div id="container"></div>
         <div id="controls">
-            <h1> {{message}} </h1>
             <div class="block">
                 <el-slider
                         v-model="value"
@@ -95,9 +94,10 @@ export default {
     }
     #controls{
         position: absolute;
-        top: 80%;
+        top: 90%;
+        left: 40%;
         width: 20%;
         height: 100%;
-        background: rgba(177, 214, 34, 0.42);
+        background: rgba(177, 214, 34, 0);
     }
 </style>
