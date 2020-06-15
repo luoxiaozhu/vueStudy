@@ -7,8 +7,6 @@ import {THREE} from './three.min';
 
 const MIN_FONT_SIZE = 12;// -最小字体大小
 const SPRITE_FONT_SIZE_RATIO = 2500;// -对sprite标签缩放，可调整
-const PLANE_FONT_SIZE_RATIO = 5;// -平面文字换算比例
-const FONT_GAP_RATIO = 3.0;// -维度标签放大参数
 /**
  * 标签公共方法合集
  */

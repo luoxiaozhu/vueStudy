@@ -8,9 +8,15 @@
                         range
                         @input="inputFuc"
                         :marks="marks"
-                        :max="30">
+                        :min="1"
+                        :max="106">
                 </el-slider>
             </div>
+        </div>
+        <div class="zd-tips">
+            <div class="zd-name">品类:玩具</div>
+            <div class="zd-date">日期:2020/6/1</div>
+            <div class="zd-value">利率：50%</div>
         </div>
     </div>
 </template>
@@ -25,9 +31,7 @@ export default {
             boxColor: '#FFF000',
             value: [4, 9],
             marks: {
-                0: '6.1',
-                15: '6.15',
-                30: '6.30'
+                1: '天数:106天'
             }
         };
     },
@@ -95,9 +99,18 @@ export default {
     #controls{
         position: absolute;
         top: 90%;
-        left: 40%;
-        width: 20%;
+        left: 25%;
+        width: 50%;
         height: 100%;
         background: rgba(177, 214, 34, 0);
+    }
+    .zd-tips {
+        position: absolute;
+        top: 0;
+        display: none;
+        background: rgba(0, 0, 0, 0.6);
+        color: #b4dcf7;
+        border-radius: 5px;
+        padding: 10px;
     }
 </style>

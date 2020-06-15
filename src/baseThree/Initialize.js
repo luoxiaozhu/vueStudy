@@ -7,11 +7,11 @@ import _Shaders from '../assets/shaders';
 const LINE_POINTS_COUNT_UNIT = 100;
 const PLANE_FONT_SIZE_RATIO = 30;// -平面文字换算比例
 const X_AXIS_INTERVAL = 5;// -x轴间距
-const Z_AXIS_INTERVAL = 5;// -z轴间距
-const Y_AXIS_MAX_VALUE = 10;
+const Z_AXIS_INTERVAL = 2;// -z轴间距
+const Y_AXIS_MAX_VALUE = 2;
 const _createClipPlane = (points, opts) => {
     opts = opts || {};
-    const {size = 1, color = randomColor(), type} = opts;
+    const {size = 1, color = '#b2a53d', type} = opts;
     const dataPoints = _getCurvePoints(points, type);
     const geometry = new THREE.PlaneBufferGeometry(size, size, dataPoints.length - 1);
     const { position } = geometry.attributes;
@@ -44,7 +44,7 @@ const _getDataFromRange = (datas, value) => {
     datas.forEach(data => {
         const pointData = {};
         pointData.name = data.name;
-        pointData.value = data.value.slice(startIndex, endIndex + 1);
+        pointData.content = data.content.slice(startIndex, endIndex + 1);
         result.push(pointData);
     });
     return result;
@@ -55,9 +55,9 @@ const _getPointsFromDatas = (datas) => {
     datas.forEach((data, dataIndex) => {
         const points = [];
         result.push(points);
-        data.value.forEach((value, valueIndex) => {
+        data.content.forEach((content, valueIndex) => {
             const vector = new THREE.Vector3(dataIndex * X_AXIS_INTERVAL + 3,
-                (value) * Y_AXIS_MAX_VALUE,
+                (content.value) * Y_AXIS_MAX_VALUE,
                 (valueIndex) * Z_AXIS_INTERVAL + 3);
             points.push(vector);
         });
@@ -73,8 +73,9 @@ const _getCurvePointsFromDatas = (datas) => {
     const points = [];
     datas.forEach((data, dataIndex) => {
         const curvePoints = [];
-        data.value.forEach((value, valueIndex) => {
-            curvePoints.push(new THREE.Vector3(X_AXIS_INTERVAL * dataIndex + 3, (value) * Y_AXIS_MAX_VALUE, Z_AXIS_INTERVAL * valueIndex + 3));
+        data.content.forEach((content, valueIndex) => {
+            curvePoints.push(new THREE.Vector3(X_AXIS_INTERVAL * dataIndex + 3,
+                (content.value) * Y_AXIS_MAX_VALUE, Z_AXIS_INTERVAL * valueIndex + 3));
         });
         points.push(_getCurvePoints(curvePoints, 'z'));
     });
@@ -90,8 +91,6 @@ const _getCurvePointsFromDatas = (datas) => {
 };
 const _createTopFace = (datas, opts) => {
     opts = opts || {};
-    const {color = '#FFFFFF'} = opts;
-    const colors = _getColorArr(color);
     const points = _getCurvePointsFromDatas(datas);
 
     const geometry = new THREE.PlaneBufferGeometry(1, 1, points.length - 1, points[0].length - 1);
@@ -141,7 +140,7 @@ const _createTopFace = (datas, opts) => {
                 value: glColors.length
             },
             height: {
-                value: Y_AXIS_MAX_VALUE * 1.5
+                value: Y_AXIS_MAX_VALUE * 5
             },
             u_lightDirection: {
                 value: new THREE.Vector3(1.0, 0.0, 0.0).normalize()
@@ -161,15 +160,20 @@ const _createTopFace = (datas, opts) => {
 };
 const _createPoint = (points, opts) => {
     opts = opts || {};
-    const {pointSize = 1, index, color = randomColor(), type} = opts;
+    const {pointSize = 0.5, index, color = '#7d7e86', type, localPlane} = opts;
     const pointCloud = new THREE.Object3D();
     pointCloud._index = index;
     const texture = new THREE.TextureLoader().load(pointImg);
     const cGeo = new THREE.Geometry();
     const Build = new THREE.Mesh(cGeo.clone());
     const colors = _getColorArr(color);
+
     points.forEach((point, index) => {
-        var sprite = new THREE.Sprite(new THREE.SpriteMaterial({map: texture, color: colors[0]}));
+        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+            map: texture,
+            color: colors[0],
+            clippingPlanes: [localPlane]
+        }));
         sprite.position.copy(point);
         sprite.position.y += 0.2;
         sprite.scale.set(pointSize, pointSize, pointSize);
@@ -189,6 +193,7 @@ const _createPoint = (points, opts) => {
         side: THREE.DoubleSide
     }));
     obj._isHelper = true;
+    obj._index = index;
     mEvent.push(obj);
     pointCloud.add(obj);
     return pointCloud;
@@ -288,7 +293,13 @@ const _animation = (self, dt) => {
         if (self.controls)self.controls.update();
         if (self.topFace) {
             const time = self.topFace.material.uniforms.u_time;
-            if (time.value <= 1)time.value += dt;
+            time.value += dt;
+            if (time.value >= 1) {
+                time.value = 1;
+                if (self._localPlane)self._localPlane._start = true;
+                self._mouseEventStart = true;
+            }
+            if (self._localPlane && self._localPlane._start && !self._localPlane._end)self._localPlane.constant += 0.2;
             const {userData} = self.topFace;
             const x = self.topFace.material.uniforms.u_x;
             if (userData.xValue > x.value)x.value += 0.5;
@@ -320,14 +331,14 @@ const _setControls = (controls, opts) => {
 const _createTextCanvas = (content) => {
     let canvas = document.createElementNS('http://www.w3.org/1999/xhtml', 'canvas');
     const context = canvas.getContext('2d');
-    context.font = 'normal 30px Arial';
+    context.font = '100 30px Arial';
     const wh = context.measureText(content);
     const width = THREE.Math.ceilPowerOfTwo(wh.width);
     const height = 32;
     canvas.width = width;
     canvas.height = height;
     canvas.style.backgroundColor = 'rgba(255,255,255,1)';
-    context.font = 'normal 30px Arial';
+    context.font = '100 30px Arial';
     context.textAlign = 'center';
     context.textBaseline = 'middle';
     // 设置字体填充颜色
@@ -416,19 +427,25 @@ const _getCurvePoints = (points, type) => {
 const _createPolyLine = (points, opts) => {
     const group = new THREE.Object3D();
     opts = opts || {};
-    const {color = '#787473', type, index} = opts;
+    const {color = '#fffbfa', type, index, localPlane, withPoint} = opts;
     const colors = _getColorArr(color);
     const dataPoints = _getCurvePoints(points, type);
     dataPoints.forEach(point => {
-        point.y += 0.2;
+        point.y += 0.1;
     });
-    const geometry = new THREE.BufferGeometry().setFromPoints(dataPoints);
-    const material = new THREE.LineBasicMaterial({ transparent: true, color: colors[0], opacity: colors[1] });
-    // Create the final object to add to the scene
     // -创建线
-    group.add(new THREE.Line(geometry, material));
-    group.add(_createPoint(points, {color, index, type}));
-    // group.add(_createClipPlane(dataPoints, {color}));
+    const geometry = new THREE.BufferGeometry().setFromPoints(dataPoints);
+    const material = new THREE.LineBasicMaterial({ transparent: true,
+        color: colors[0],
+        opacity: colors[1],
+        clippingPlanes: [ localPlane ]});
+    const lineMesh = new THREE.Line(geometry, material);
+    lineMesh._type = type;
+    lineMesh._index = index;
+    group.add(lineMesh);
+    // -创建点
+    if (withPoint)group.add(_createPoint(points, {index, type, localPlane}));
+
     return group;
 };
 const _pick = (event, self) => {
@@ -496,13 +513,17 @@ class Initialize {
                 this.renderer.setSize(wh.w, wh.h);
                 this.renderer.setPixelRatio(window.devicePixelRatio);
                 this.renderer.setClearColor(bg.color, bg.opacity);
+                this.renderer.localClippingEnabled = true;
                 this.container.append(this.renderer.domElement);
                 // -添加鼠标事件
                 window.addEventListener('resize', this.onWindowResize.bind(this), false);
                 this.container[0].addEventListener('mousemove', this.onDocumentMouseMove.bind(this), false);
                 this.container[0].addEventListener('mousedown', this.onDocumentMouseDown.bind(this), false);
+                this.container[0].addEventListener('dblclick', this.onDocumentDoubleClick.bind(this), false);
                 this.cubes = [];
                 this._model = '3D';
+                this._mouseEventStart = false;
+                this.df_dbClickDelay = false;
             } catch (e) {
                 console.log(e);
             }
@@ -534,10 +555,10 @@ class Initialize {
         self.controls.target.set(controls.target[0], controls.target[1], controls.target[2]);
         self.controls.update();
         self._model = '3D';
-        self.setRange(self.value);
+        self.setRange(self._value);
     }
 
-    setDatas (datas, opts) {
+    setDatas (datas) {
         const self = this;
         if (self.scene) {
             self.scene.add(_createAxios());
@@ -558,7 +579,7 @@ class Initialize {
     }
     setRange (value) {
         const self = this;
-        self.value = value;
+        self._value = value;
         if (self._model === '3D') {
             self.disposeObject();
             const datas = _getDataFromRange(self._metaData, value);
@@ -573,12 +594,19 @@ class Initialize {
 
             };
             self.scene.add(self.topFace);
-            const [startIndex, endIndex] = value;
+            if (!self._localPlane) {
+                self._localPlane = new THREE.Plane(new THREE.Vector3(0, 0, -1), 0.0);
+            } else {
+                self._localPlane.set(new THREE.Vector3(0, 0, -1), 0.0);
+                self._localPlane._start = false;
+                self._localPlane._end = false;
+            }
+            const [startIndex] = value;
             const points = _getPointsFromDatas(datas);
             self._points = points;
             // -创建z轴标签
             points[0].forEach((point, i) => {
-                const zLabel = _createPlaneText({type: 'z', content: '6月' + (i + startIndex + 1) + '日', index: i});
+                const zLabel = _createPlaneText({type: 'z', content: datas[0].content[i].date, index: i});
                 zLabel.position.set(-zLabel._size.width / 2 - 1, 0, point.z);
                 self.zLabels.add(zLabel);
                 // -创建z方向线
@@ -587,7 +615,7 @@ class Initialize {
                     linePoints.push(p[i]);
                 });
                 self.lines.add(_createPolyLine(linePoints, {
-                    type: 'x', index: i
+                    type: 'x', index: i, localPlane: self._localPlane, withPoint: true
                 }));
             });
             // -创建x轴标签
@@ -598,9 +626,9 @@ class Initialize {
                 xLabel.position.set(point[0].x, 0, -xLabel._size.width / 2 - 1);
                 self.xLabels.add(xLabel);
                 // -创建x方向线
-                self.lines.add(_createPolyLine(point, {
-                    type: 'z'
-                }));
+                // self.lines.add(_createPolyLine(point, {
+                //     type: 'z', index, localPlane: self._localPlane, withPoint: true
+                // }));
             });
         }
     }
@@ -622,8 +650,17 @@ class Initialize {
         const self = this;
         const {position} = node;
         if (self.topFace) {
-            self.topFace.userData.xValue = position.x + 0.1;
-            self.topFace.userData.zValue = position.z + 0.1;
+            self.topFace.material.uniforms.u_x.value = 0.0;
+            self.topFace.material.uniforms.u_z.value = 0.0;
+            self.topFace.userData.xValue = position.x + 0.001;
+            self.topFace.userData.zValue = position.z + 0.001;
+        }
+        if (self._clipPlane) {
+            publicLabel.disposeObj(self._clipPlane);
+        }
+        if (self._localPlane) {
+            self._localPlane.set(new THREE.Vector3(0, 0, 1), 0);
+            self._localPlane._end = true;
         }
         const points = self._points;
         if (node._type === 'z') {
@@ -635,11 +672,19 @@ class Initialize {
                 type: 'x'
             });
             self.scene.add(self._clipPlane);
+            if (self._localPlane) {
+                self._localPlane.set(new THREE.Vector3(0, 0, 1), -position.z + 0.1);
+                if (self._localPlane._start)self._localPlane._end = true;
+            }
         } else if (node._type === 'x') {
             self._clipPlane = _createClipPlane(points[node._index], {
                 type: 'z'
             });
             self.scene.add(self._clipPlane);
+            if (self._localPlane) {
+                self._localPlane.set(new THREE.Vector3(1, 0, 0), -position.x + 0.1);
+                if (self._localPlane._start)self._localPlane._end = true;
+            }
         }
     }
     onWindowResize (event) {
@@ -652,43 +697,74 @@ class Initialize {
     }
 
     onDocumentMouseMove (event) {
+        event.preventDefault();
         const self = this;
+        if (!self._mouseEventStart) return;
         const intersects = _pick(event, self);
-        if (self._clipPlane) {
-            publicLabel.disposeObj(self._clipPlane);
-        }
+        $('.zd-tips').hide();
+        self.container[0].style.cursor = 'auto';
+
         if (intersects.length > 0) {
             self.container[0].style.cursor = 'pointer';
+            if (intersects[0].object._isHelper) {
+                const {faceIndex, object} = intersects[0];
+                const { _datas } = self;
+                const index = Math.floor(faceIndex / 2);
+                const content = _datas[index].content[object._index];
+                const name = '品类：' + _datas[index].name;
+                const date = '日期：' + content.date;
+                const value = '利率：' + content.value.toFixed(2);
+                // if (obj.name != oldName) {
+                $('.zd-tips').show();
+                const h = $('.zd-tips').height();
+
+                $('.zd-tips>.zd-name').text(name);
+                $('.zd-tips>.zd-date').text(date);
+                $('.zd-tips>.zd-value').text(value);
+                $('.zd-tips').css({
+                    top: event.clientY - h - 30,
+                    left: event.clientX + 30
+                });
+            }
+        }
+    }
+
+    onDocumentMouseDown (event) {
+        event.preventDefault();
+        const self = this;
+        clearTimeout(self.df_dbClickDelay);
+        const intersects = _pick(event, self);
+        if (intersects.length > 0) {
             if (intersects[0].object._isLabel) {
                 self.pickSprite(intersects[0].object);
-            } else {
+            }
+            self.container[0].style.cursor = 'pointer';
+        } else {
+            self.container[0].style.cursor = 'auto';
+        }
+    }
+
+    onDocumentDoubleClick (event) {
+        event.preventDefault();
+        const self = this;
+        self.df_dbClickDelay = setTimeout(function () {
+            const intersects = _pick(event, self);
+            if (intersects.length < 1 || !intersects[0].object._isLabel) {
                 if (self.topFace) {
                     self.topFace.material.uniforms.u_x.value = 0.0;
                     self.topFace.material.uniforms.u_z.value = 0.0;
                     self.topFace.userData.xValue = 0.0;
                     self.topFace.userData.zValue = 0.0;
                 }
+                if (self._localPlane) {
+                    self._localPlane.set(new THREE.Vector3(0, 0, 1), 0);
+                    self._localPlane._end = true;
+                }
+                if (self._clipPlane) {
+                    publicLabel.disposeObj(self._clipPlane);
+                }
             }
-        } else {
-            self.container[0].style.cursor = 'auto';
-            if (self.topFace) {
-                self.topFace.material.uniforms.u_x.value = 0.0;
-                self.topFace.material.uniforms.u_z.value = 0.0;
-                self.topFace.userData.xValue = 0.0;
-                self.topFace.userData.zValue = 0.0;
-            }
-        }
-    }
-
-    onDocumentMouseDown (event) {
-        const self = this;
-        const intersects = _pick(event, self);
-        if (intersects.length > 0 && intersects[0].object._isHelper) {
-            // self.pickSprite(intersects[0]);
-            self.container[0].style.cursor = 'pointer';
-        } else {
-            self.container[0].style.cursor = 'auto';
-        }
+        }, 300);
     }
 }
 

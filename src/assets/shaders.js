@@ -26,8 +26,7 @@ export default {
         varying vec3 v_normal;
         varying float _y;             
              
-        void main() {
-            float PI = 3.1415926;
+        void main() {            
             vec3 tt_color = vec3(1.0,1.0,1.0);
             float curI = _y / height;
             if (colorNum != 0.0) {
