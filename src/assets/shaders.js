@@ -1,17 +1,17 @@
 export default {
     ClipPlaneVShader: ``,
     ClipPlaneFShader: ``,
-    TopFaceVShader: `uniform float u_time;  
-        uniform float u_x;
-        uniform float u_z;       
+    TopFaceVShader: `uniform float u_time; 
         varying vec3 v_normal;
-        varying float _y;  
+        varying float _y; 
+        varying vec3 va_position; 
         
         void main() { 
             vec3 v_position = vec3(position.r,mix(0.0,position.y,u_time), position.z);
-            v_position.y = v_position.z <= u_z ? 0.0:v_position.y;
-            v_position.y = v_position.x <= u_x ? 0.0:v_position.y;
-            _y = v_position.y;            
+            // v_position.y = v_position.z <= u_z ? 0.0:v_position.y;
+            // v_position.y = v_position.x <= u_x ? 0.0:v_position.y;
+            _y = v_position.y;   
+            va_position = v_position;         
             vec4 mvPosition = modelViewMatrix * vec4(v_position, 1.0); 
             v_normal = _y == 0.0 ? vec3(.0,.0,.0) :normalMatrix * normal;             
             gl_Position = projectionMatrix * mvPosition;
@@ -22,12 +22,15 @@ export default {
         uniform vec3 u_lightDirection;
         uniform vec3 u_lightColor;
         uniform vec3 u_AmbientLight; 
+        uniform float u_x;
+        uniform float u_z; 
        
         varying vec3 v_normal;
-        varying float _y;             
+        varying float _y;   
+        varying vec3 va_position;           
              
         void main() {            
-            vec3 tt_color = vec3(1.0,1.0,1.0);
+            vec3 tt_color = vec3(1.0,0.0,0.0);
             float curI = _y / height;
             if (colorNum != 0.0) {
                 float baseH = height / colorNum;
@@ -49,6 +52,7 @@ export default {
                     }  
                 };
             } 
+            if(va_position.x < u_x || va_position.z < u_z)discard;
             
             vec3 dst_color = _y < 1.0 ? colorArr[NUM_DISTINCT - 1] : tt_color;
             vec3 normal = normalize(v_normal);
@@ -56,6 +60,6 @@ export default {
             vec3 diffuse = u_lightColor * dst_color * nDotL;
             vec3 ambient = u_AmbientLight * dst_color;
             vec3 gcolor = diffuse + ambient;
-            gl_FragColor = vec4(gcolor, 1.0); ;
+            gl_FragColor = vec4(gcolor, 1.0);
         }`
 };

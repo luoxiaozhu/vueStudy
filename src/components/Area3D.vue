@@ -7,6 +7,7 @@
                         v-model="value"
                         range
                         @input="inputFuc"
+                        :format-tooltip="formatTooltip"
                         :marks="marks"
                         :min="1"
                         :max="106">
@@ -29,7 +30,7 @@ export default {
         return {
             message: '控制器',
             boxColor: '#FFF000',
-            value: [4, 9],
+            value: [1, 1],
             marks: {
                 1: '天数:106天'
             }
@@ -66,6 +67,10 @@ export default {
         },
         changeCamera () {
             if (this.INT) this.INT.switchCamera();
+        },
+        formatTooltip (val) {
+            const result = val === null ? val : Data[0].content[val - 1].date;
+            return result;
         }
     },
     mounted () {
