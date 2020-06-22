@@ -2,7 +2,7 @@ import {THREE} from '@corelib/three.min';
 import $ from 'jquery';
 import PublicFunc from '@corelib/PublicFunc';
 
-const Y_DELTA_COUNT = 10;
+const Y_DELTA_COUNT = 3;
 
 const _creatContainer = (id) => {
     var containers = $('<div></div>');
@@ -64,6 +64,7 @@ const _animation = (self, dt) => {
                 time.value = 1;
                 if (self._localPlane)self._localPlane._start = true;
                 self._mouseEventStart = true;
+                if (self.valueLabels)self.valueLabels.visible = true;
             }
             if (self._localPlane && self._localPlane._start && !self._localPlane._end)self._localPlane.constant += 0.2;
             const {userData} = self.topFace;
@@ -73,7 +74,52 @@ const _animation = (self, dt) => {
             const z = self.topFace.material.uniforms.u_z;
             if (userData.zValue > z.value)z.value += 0.5;
         }
+        if (self.yLabels && self.yLabels.children.length > 0) {
+            self.yLabels.children.forEach(label => {
+                const line = label.children[0];
+                const sprite = label.children[1];
+                if (line && sprite) {
+                    line.rotation.copy(self.camera.rotation);
+                    const {vertices} = line.geometry;
+                    const vec = vertices[1].clone();
+                    vec.applyQuaternion(line.quaternion);
+                    sprite.position.copy(vec);
+                }
+            });
+        }
+        if (self.zLabels && self.zLabels.children.length > 0) {
+            const centerChange = PublicFunc.transCoord(new THREE.Vector3(0, 0, 0), self).x >=
+                PublicFunc.transCoord(new THREE.Vector3(0, 0, 1), self).x;
+            self.zLabels.traverse(label => {
+                if (label._isSprite) {
+                    if (centerChange)label.center.set(0, 0.5);
+                    else label.center.set(0.5, 1);
+                }
+            });
+        }
     }
+};
+
+const _setValueLables = (self, type, index) => {
+    if (self.valueLabels) {
+        PublicFunc.disposeObj(self.valueLabels);
+        self.valueLabels.visible = false;
+        self.scene.add(self.valueLabels);
+    }
+    const {minPosition, maxPosition} = PublicFunc.getMaxMinValuePoint(type, index, self.lines);
+    const valueRange = PublicFunc.getDatasValueRange(self._datas);
+    self.valueLabels.add(PublicFunc.createUpLineTip({
+        content: 'Min:' + (minPosition.y / 10 + 0.5 - 0.02).toFixed(2),
+        position: minPosition,
+        color: '#0A2EF5',
+        maxHeight: Math.ceil(maxPosition.y)
+    }));
+    self.valueLabels.add(PublicFunc.createUpLineTip({
+        content: 'Max:' + (maxPosition.y / 10 + 0.5 - 0.02).toFixed(2),
+        position: maxPosition,
+        color: '#FF0000',
+        maxHeight: Math.ceil(maxPosition.y)
+    }));
 };
 
 const _setControls = (controls, opts) => {
@@ -164,6 +210,7 @@ class Initialize {
                 this._model = '3D';
                 this._mouseEventStart = false;
                 this.df_dbClickDelay = false;
+                this._mouseFirstDown = false;
             } catch (e) {
                 console.log(e);
             }
@@ -193,7 +240,6 @@ class Initialize {
     setDatas (datas) {
         const self = this;
         if (self.scene) {
-            self.scene.add(PublicFunc.createAxios());
             datas.forEach(data => {
                 data.content.reverse();
             });
@@ -214,6 +260,15 @@ class Initialize {
                 self.yLabels = new THREE.Object3D();
                 self.scene.add(self.yLabels);
             }
+            if (!self.valueLabels) {
+                self.valueLabels = new THREE.Object3D();
+                self.valueLabels.visible = false;
+                self.scene.add(self.valueLabels);
+            }
+            if (!self.axisLine) {
+                self.axisLine = new THREE.Object3D();
+                self.scene.add(self.axisLine);
+            }
         }
     }
     setRange (value) {
@@ -222,23 +277,34 @@ class Initialize {
         if (self._model === '3D') {
             self.disposeObject();
             const datas = PublicFunc.getDataFromRange(self._metaData, self._value);
+            self._datas = datas;
             const valueRange = PublicFunc.getDatasValueRange(datas);
-            const delta = (valueRange.maxValue - valueRange.minValue) / Y_DELTA_COUNT;
-            let startValue = valueRange.minValue;
-            while (startValue < valueRange.maxValue) {
-                const sprite = PublicFunc.createSpriteText({content: startValue.toFixed(2)});
-                sprite.position.y = (startValue - valueRange.minValue) * 10;
+            // const delta = Math.round(100 * (valueRange.maxValue - valueRange.minValue) / Y_DELTA_COUNT) / 100;
+            // let startValue = valueRange.minValue;
+            // while (startValue <= valueRange.maxValue + delta) {
+            //     const sprite = PublicFunc.createSpriteText({content: startValue.toFixed(2)});
+            //     sprite.position.set(0, (startValue - valueRange.minValue) * 10, 0);
+            //     self.yLabels.add(sprite);
+            //     startValue += delta;
+            // }
+            for (let i = 1; i < 8; i++) {
+                const sprite = PublicFunc.createSpriteText({content: i * 0.5});
+                sprite.position.set(0, (i - 1) * 5, 0);
                 self.yLabels.add(sprite);
-                startValue += delta;
+            }
+            if (self.axisLine) {
+                self.axisLine.add(PublicFunc.createAxis({
+                    x: datas[0].content.length, y: 4, z: datas.length
+                }));
             }
             if (!self._localPlane) {
-                self._localPlane = new THREE.Plane(new THREE.Vector3(0, 0, -1), 0.0);
+                self._localPlane = new THREE.Plane(new THREE.Vector3(-1, 0, 0), 0.0);
             } else {
-                self._localPlane.set(new THREE.Vector3(0, 0, -1), 0.0);
+                self._localPlane.set(new THREE.Vector3(-1, 0, 0), 0.0);
                 self._localPlane._start = false;
                 self._localPlane._end = false;
             }
-            self._datas = datas;
+
             if (self.topFace) {
                 PublicFunc.disposeObj(self.topFace);
             }
@@ -251,47 +317,80 @@ class Initialize {
             self.scene.add(self.topFace);
             const points = PublicFunc.getPointsFromDatas(datas);
             self._points = points;
-            // -创建z轴标签
+            // -创建x轴标签
             points[0].forEach((point, i) => {
-                const zLabel = PublicFunc.createPlaneText({type: 'z', content: datas[0].content[i].date, index: i}, mEvent);
-                zLabel.position.set(-zLabel._size.width / 2 - 1, 0, point.z);
-                self.zLabels.add(zLabel);
-                // -创建z方向线
+                const xLabel = PublicFunc.createPlaneText({
+                    type: 'x', content: datas[0].content[i].date, index: i, color: 'rgba(256,256,256,1)'
+                }, mEvent);
+                xLabel.position.set(point.x, 0, -xLabel._size.width / 2 - 1);
+                self.xLabels.add(xLabel);
+                const xSpriteLabel = PublicFunc.createSpriteText({
+                    type: 'x', content: datas[0].content[i].date, index: i, center: new THREE.Vector2(0.5, 1)
+                });
+                xSpriteLabel.position.set(point.x, 0, xLabel.position.z);
+                // self.xLabels.add(xSpriteLabel);
+                // -创建x方向线
                 const linePoints = [];
                 points.forEach(p => {
                     linePoints.push(p[i]);
                 });
-                self.lines.add(PublicFunc.createPolyLine(linePoints, {
-                    type: 'z', index: i, localPlane: self._localPlane, withPoint: true
-                }, mEvent));
+                if (linePoints.length > 1) {
+                    self.lines.add(PublicFunc.createPolyLine(linePoints, {
+                        type: 'x', index: i, localPlane: self._localPlane, withPoint: true
+                    }, mEvent));
+                }
             });
-            // -创建x轴标签
+            // -创建z轴标签
             points.forEach((point, index) => {
-                const xLabel = PublicFunc.createPlaneText({
-                    type: 'x', content: datas[index].name, index
+                const zLabel = PublicFunc.createPlaneText({
+                    type: 'z', content: datas[index].name, ratio: 2.0, index, color: 'rgba(256,256,256,0)'
                 }, mEvent);
-                xLabel.position.set(point[0].x, 0, -xLabel._size.width / 2 - 1);
-                self.xLabels.add(xLabel);
-                // -创建x方向线
-                self.lines.add(PublicFunc.createPolyLine(point, {
-                    type: 'x', index, localPlane: self._localPlane
-                }, mEvent));
+                zLabel.position.set(-zLabel._size.width / 2 - 1, 0, point[0].z);
+                self.zLabels.add(zLabel);
+                const zSpriteLabel = PublicFunc.createSpriteText({
+                    type: 'z', content: datas[index].name, index, center: new THREE.Vector2(0.5, 1)
+                });
+                zSpriteLabel.position.set(-1, 0, point[0].z);
+                self.zLabels.add(zSpriteLabel);
+                // -创建z方向线
+                if (point.length > 1) {
+                    self.lines.add(PublicFunc.createPolyLine(point, {
+                        type: 'z', index, localPlane: self._localPlane
+                    }, mEvent));
+                }
             });
+            _setValueLables(self);
+            if (!self._mouseFirstDown) {
+                if (self._fatLine) {
+                    PublicFunc.disposeObj(self._fatLine);
+                }
+                const curve = PublicFunc.getCurveFromLine('x', 0, self.lines);
+                if (curve) {
+                    self._fatLine = PublicFunc.createFatLine(curve);
+                    self.scene.add(self._fatLine);
+                }
+                self._mouseFirstDown = true;
+            }
         }
     }
 
     disposeObject () {
         const self = this;
-        if (self.zLabels || self.lines || self.xLabels || self.yLabels) {
+        if (self.zLabels || self.lines || self.xLabels || self.yLabels || self.valueLabels || self.axisLine) {
+            mEvent = [];
             PublicFunc.disposeObj(self.zLabels);
             PublicFunc.disposeObj(self.lines);
             PublicFunc.disposeObj(self.xLabels);
             PublicFunc.disposeObj(self.yLabels);
-            mEvent = [];
+            PublicFunc.disposeObj(self.valueLabels);
+            PublicFunc.disposeObj(self.axisLine);
             self.scene.add(self.zLabels);
             self.scene.add(self.xLabels);
             self.scene.add(self.lines);
             self.scene.add(self.yLabels);
+            self.scene.add(self.axisLine);
+            self.valueLabels.visible = false;
+            self.scene.add(self.valueLabels);
         }
         if (self._clipPlane) {
             PublicFunc.disposeObj(self._clipPlane);
@@ -318,26 +417,26 @@ class Initialize {
             self._localPlane._end = true;
         }
         const points = self._points;
-        if (node._type === 'z') {
+        if (node._type === 'x') {
             const linePoints = [];
             for (let i = 0; i < points.length; i++) {
                 linePoints.push(points[i][node._index]);
             }
             self._clipPlane = PublicFunc.createClipPlane(linePoints, {
-                type: 'x'
-            });
-            self.scene.add(self._clipPlane);
-            if (self._localPlane) {
-                self._localPlane.set(new THREE.Vector3(0, 0, 1), -position.z + 0.1);
-                if (self._localPlane._start)self._localPlane._end = true;
-            }
-        } else if (node._type === 'x') {
-            self._clipPlane = PublicFunc.createClipPlane(points[node._index], {
                 type: 'z'
             });
             self.scene.add(self._clipPlane);
             if (self._localPlane) {
                 self._localPlane.set(new THREE.Vector3(1, 0, 0), -position.x + 0.1);
+                if (self._localPlane._start)self._localPlane._end = true;
+            }
+        } else if (node._type === 'z') {
+            self._clipPlane = PublicFunc.createClipPlane(points[node._index], {
+                type: 'x'
+            });
+            self.scene.add(self._clipPlane);
+            if (self._localPlane) {
+                self._localPlane.set(new THREE.Vector3(0, 0, 1), -position.z + 0.1);
                 if (self._localPlane._start)self._localPlane._end = true;
             }
         }
@@ -357,6 +456,7 @@ class Initialize {
         if (!self._mouseEventStart) return;
         const intersects = _pick(event, self);
         $('.zd-tips').hide();
+        $('.label-tip').hide();
         self.container[0].style.cursor = 'auto';
         if (self._axesLine) {
             PublicFunc.disposeObj(self._axesLine);
@@ -368,7 +468,7 @@ class Initialize {
         }
         if (intersects.length > 0) {
             self.container[0].style.cursor = 'pointer';
-            if (intersects[0].object._isHelper) {
+            if (intersects[0].object._isHelper && intersects[0].object.visible) {
                 const {faceIndex, object, point} = intersects[0];
                 const { _datas } = self;
                 const index = Math.floor(faceIndex / 2);
@@ -394,6 +494,13 @@ class Initialize {
                 if (clickObject !== intersects[0].object) {
                     clickObject = intersects[0].object;
                     clickObject.material.color = new THREE.Color('#FF0000');
+                    $('.label-tip').show();
+                    const h = $('.label-tip').height();
+                    $('.label-tip').text(clickObject.userData.content);
+                    $('.label-tip').css({
+                        top: event.clientY - h - 10,
+                        left: event.clientX + 10
+                    });
                 }
             }
         }
@@ -408,6 +515,10 @@ class Initialize {
             if (intersects[0].object._isLabel) {
                 const {object} = intersects[0];
                 self.pickSprite(object);
+
+                PublicFunc.setPointsVisible(object._type, object._index, self.lines);
+                _setValueLables(self, object._type, object._index);
+
                 PublicFunc.changeLineColor(object._type, object._index, self.lines);
                 if (self._fatLine) {
                     PublicFunc.disposeObj(self._fatLine);
@@ -432,6 +543,8 @@ class Initialize {
         const self = this;
         self.df_dbClickDelay = setTimeout(function () {
             const intersects = _pick(event, self);
+            PublicFunc.setPointsVisible(undefined, undefined, self.lines);
+            _setValueLables(self);
             if (intersects.length < 1 || !intersects[0].object._isLabel) {
                 if (self.topFace) {
                     self.topFace.material.uniforms.u_x.value = 0.0;

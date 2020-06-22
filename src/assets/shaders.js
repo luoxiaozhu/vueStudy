@@ -18,7 +18,9 @@ export default {
         }`,
     TopFaceFShader: `uniform vec3 colorArr[NUM_DISTINCT];        
         uniform float colorNum;
-        uniform float height;
+        uniform float height;        
+        uniform float u_maxHeight;
+        uniform float u_minHeight;
         uniform vec3 u_lightDirection;
         uniform vec3 u_lightColor;
         uniform vec3 u_AmbientLight; 
@@ -34,8 +36,8 @@ export default {
             float curI = _y / height;
             if (colorNum != 0.0) {
                 float baseH = height / colorNum;
-                float colorMod = mod(_y, baseH);
-                int bcolorIndex = int(floor((height - _y) / baseH));
+                float colorMod = mod(_y - u_minHeight , baseH);
+                int bcolorIndex = int(floor((u_maxHeight - _y) / baseH));
                 for (int i = 0; i < NUM_DISTINCT; i++){
                     vec3 t_color = colorArr[i];
                     int index = int(i - 1);
